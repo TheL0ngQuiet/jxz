@@ -1,0 +1,1421 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>西域世界地图</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Microsoft YaHei', '微软雅黑', sans-serif;
+            overflow: hidden;
+            background: #0a0a0a;
+        }
+
+        .map-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 100%);
+            overflow: hidden;  /* 添加overflow: hidden确保内容不超出 */
+        }
+
+        /* 地图背景 */
+        .map-background {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            /* background-image: url('https://files.catbox.moe/u5pdt5.png'); */
+            background-image: url('img/location/世界地图.png');
+            background-size: cover;
+            background-repeat: no-repeat;
+            background-position: center;
+            filter: brightness(0.8) contrast(1.1) saturate(1);
+            /* 移除box-shadow和border-radius，因为现在是全屏 */
+        }
+
+        /* 地图标记 */
+        .map-marker {
+            position: absolute;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        /* 光标样式 - 白色圆点 */
+        .marker-pin {
+            width: 1vw;
+            height: 1vw;
+            min-width: 8px;
+            min-height: 8px;
+            max-width: 12px;
+            max-height: 12px;
+            background: #ffffff;
+            border: 2px solid #000000;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.6), 
+                        0 0 20px rgba(255, 255, 255, 0.3),
+                        0 2px 4px rgba(0, 0, 0, 0.5);
+            position: relative;
+        }
+
+        .marker-pin::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 150%;
+            height: 150%;
+            background: radial-gradient(circle, 
+                rgba(255, 255, 255, 0.2) 0%,
+                transparent 60%);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(2); opacity: 0; }
+        }
+
+        /* 地名标签 */
+        .marker-label {
+            position: absolute;
+            bottom: 100%;
+            left: 50%;
+            transform: translateX(-50%);
+            margin-bottom: 0.5vh;
+            background: rgba(0, 0, 0, 0.85);
+            color: #ffffff;
+            padding: 0.6vh 1.2vw;
+            border-radius: 0.6vh;
+            font-size: clamp(12px, 1.4vw, 15px);
+            white-space: nowrap;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+            font-weight: 500;
+        }
+
+        .map-marker:hover .marker-pin {
+            transform: scale(1.2);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.9), 
+                        0 0 30px rgba(255, 255, 255, 0.5),
+                        0 2px 6px rgba(0, 0, 0, 0.7);
+        }
+
+        .map-marker:hover .marker-label {
+            background: rgba(0, 0, 0, 0.95);
+            border-color: rgba(255, 255, 255, 0.4);
+        }
+
+        /* 弹窗 */
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            backdrop-filter: blur(8px);
+        }
+
+        .modal-content {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vw;
+            max-width: 600px;
+            height: 70vh;
+            max-height: 500px;
+            border-radius: 1.5vh;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* 动态背景图片 */
+        .modal-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            z-index: 0;
+        }
+
+        /* 毛玻璃遮罩层 */
+        .modal-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            z-index: 1;
+        }
+
+        /* 确保内容在遮罩层之上 */
+        .modal-inner {
+            position: relative;
+            z-index: 2;
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+
+        /* 弹窗标题 - 优化样式 */
+        .modal-header {
+            padding: 2.5vh 3vw;
+            text-align: center;
+            background: linear-gradient(180deg, 
+                rgba(0, 0, 0, 0.8) 0%, 
+                rgba(0, 0, 0, 0.4) 100%);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+        }
+
+        .modal-header h2 {
+            color: #ffffff;
+            font-size: clamp(18px, 2.5vw, 22px);
+            font-weight: 600;
+            margin: 0;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 弹窗上部内容区 */
+        .modal-body {
+            flex: 1;
+            padding: 2.5vh 3vw;
+            overflow-y: auto;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        .modal-body p {
+            line-height: 1.8;
+            margin-bottom: 1.5vh;
+            font-size: clamp(13px, 1.8vw, 15px);
+            color: rgba(255, 255, 255, 0.85);
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 弹窗底部按钮区 */
+        .modal-footer {
+            height: 20%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: rgba(0, 0, 0, 0.6);
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2vh;
+        }
+
+        .btn {
+            padding: 1.5vh 4vw;
+            background: #4ECDC4;
+            color: #000000;
+            border: none;
+            border-radius: 0.8vh;
+            font-size: clamp(14px, 2vw, 16px);
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(78, 205, 196, 0.3);
+            min-width: 120px;
+        }
+
+        .btn:hover {
+            background: #45B7B8;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(78, 205, 196, 0.5);
+        }
+
+        .btn:active {
+            transform: translateY(0);
+        }
+
+        /* NPC列表样式 */
+        .npc-list {
+            display: grid;
+            gap: 1.2vh;
+            margin-top: 1.5vh;
+        }
+
+        .npc-item {
+            display: flex;
+            align-items: center;
+            padding: 1.2vh 2vw;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.6vh;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .npc-item:hover {
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(78, 205, 196, 0.5);
+        }
+
+        .npc-checkbox {
+            width: 2vw;
+            height: 2vw;
+            min-width: 16px;
+            min-height: 16px;
+            max-width: 20px;
+            max-height: 20px;
+            margin-right: 2vw;
+            accent-color: #4ECDC4;
+            cursor: pointer;
+        }
+
+        .npc-name {
+            flex: 1;
+            font-size: clamp(13px, 1.8vw, 15px);
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* 新增：NPC置灰与提示样式 */
+        .npc-item.disabled {
+            opacity: 0.6;
+        }
+        .npc-name.disabled {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        .npc-hint {
+            margin-left: 1vw;
+            font-size: clamp(11px, 1.3vw, 13px);
+            color: rgba(255, 255, 255, 0.55);
+        }
+
+        /* 关闭按钮 - 修复z-index问题 */
+        .close-btn {
+            position: absolute;
+            top: 1.5vh;
+            right: 1.5vw;
+            width: 3vw;
+            height: 3vw;
+            min-width: 30px;
+            min-height: 30px;
+            max-width: 36px;
+            max-height: 36px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            color: rgba(255, 255, 255, 0.8);
+            font-size: clamp(18px, 2.5vw, 24px);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            z-index: 10;
+        }
+
+        .close-btn:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.5);
+            transform: rotate(90deg);
+        }
+
+        /* 提示文本样式 */
+        .tip-text {
+            text-align: center;
+            color: rgba(255, 255, 255, 0.6);
+            font-size: clamp(12px, 1.6vw, 14px);
+            margin-bottom: 2vh;
+        }
+
+        /* 滚动条美化 */
+        .modal-body::-webkit-scrollbar {
+            width: 0.4vw;
+            min-width: 4px;
+            max-width: 6px;
+        }
+
+        .modal-body::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.2vw;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb {
+            background: rgba(78, 205, 196, 0.5);
+            border-radius: 0.2vw;
+        }
+
+        .modal-body::-webkit-scrollbar-thumb:hover {
+            background: rgba(78, 205, 196, 0.7);
+        }
+
+        /* 结果展示样式 */
+        .result-message {
+            text-align: center;
+            padding: 4vh 2vw;
+        }
+
+        .result-message h3 {
+            color: #4ECDC4;
+            font-size: clamp(16px, 2.2vw, 20px);
+            margin-bottom: 2vh;
+            font-weight: 600;
+        }
+
+        .result-message p {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: clamp(14px, 1.8vw, 16px);
+            line-height: 1.8;
+        }
+
+        /* 危险度信息样式 - 重新设计层次 */
+        .danger-info {
+            margin: 2vh 0;
+            padding: 1.5vh 2vw;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 0.8vh;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .info-row {
+            display: flex;
+            align-items: center;  /* 改为顶部对齐 */
+            margin-bottom: 1.2vh;
+            flex-wrap: wrap;
+        }
+
+        /* 第一层：主标题（最大） */
+        .info-label {
+            font-size: clamp(14px, 2vw, 18px);  /* 最大字体 */
+            font-weight: 700;
+            color: #ffffff;  /* 纯白色更醒目 */
+            margin-right: 1vw;
+            min-width: fit-content;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 第二层：级别标签（中等） */
+        .danger-level {
+            padding: 0.25vh 0.8vw;
+            border-radius: 0.4vh;
+            font-size: clamp(12px, 1.6vw, 15px);  /* 中等字体 */
+            font-weight: 600;
+            margin-right: 0.8vw;
+            align-self: center;
+        }
+
+        /* 第三层：描述文字（最小） */
+        .info-desc {
+            color: rgba(255, 255, 255, 0.65);  /* 稍微降低透明度 */
+            font-size: clamp(11px, 1.3vw, 13px);  /* 最小字体 */
+            line-height: 1.5;
+            flex: 1;
+            margin-top: 0.2vh;  /* 微调垂直对齐 */
+        }
+
+        /* 危险度级别颜色保持不变 */
+        .danger-低 { background: rgba(76, 175, 80, 0.3); color: #4CAF50; }
+        .danger-较低 { background: rgba(139, 195, 74, 0.3); color: #8BC34A; }
+        .danger-中 { background: rgba(255, 193, 7, 0.3); color: #FFC107; }
+        .danger-较高 { background: rgba(255, 152, 0, 0.3); color: #FF9800; }
+        .danger-高 { background: rgba(244, 67, 54, 0.3); color: #F44336; }
+
+        .friendly-低 { background: rgba(244, 67, 54, 0.3); color: #F44336; }
+        .friendly-中 { background: rgba(255, 193, 7, 0.3); color: #FFC107; }
+        .friendly-较高 { background: rgba(139, 195, 74, 0.3); color: #8BC34A; }
+        .friendly-高 { background: rgba(76, 175, 80, 0.3); color: #4CAF50; }
+
+        /* 行动建议部分 */
+        .advice-list {
+            margin-top: 0.8vh;
+            padding-left: 2vw;
+        }
+
+        .advice-item {
+            color: rgba(255, 255, 255, 0.65);  /* 与描述文字一致 */
+            font-size: clamp(11px, 1.3vw, 13px);  /* 最小字体 */
+            line-height: 1.6;
+            margin-bottom: 0.6vh;
+            position: relative;
+            padding-left: 1.5vw;
+        }
+
+        .advice-item::before {
+            content: '▸';
+            position: absolute;
+            left: 0;
+            color: #4ECDC4;
+            font-size: clamp(10px, 1.2vw, 12px);
+        }
+
+        .reputation-warning {
+            background: rgba(244, 67, 54, 0.2);
+            border: 1px solid rgba(244, 67, 54, 0.5);
+            padding: 1vh 2vw;
+            border-radius: 0.5vh;
+            margin: 1vh 0;
+            text-align: center;
+            color: #F44336;
+        }
+
+        /* 事件标记样式 */
+        .event-indicator {
+            position: absolute;
+            right: 0.5vw;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: clamp(10px, 1.2vw, 14px);
+            font-weight: bold;
+            margin-left: 0.5vw;
+        }
+
+        .event-random {
+            color: #FFD700;  /* 金黄色 */
+            text-shadow: 0 0 3px rgba(255, 215, 0, 0.8);
+        }
+
+        .event-battle {
+            color: #FF4444;  /* 红色 */
+            text-shadow: 0 0 3px rgba(255, 68, 68, 0.8);
+            animation: blink 1s infinite;
+        }
+
+        .event-bounty {
+            color: #d4af37;  /* 金色，区别于随机战斗事件的红色 */
+            text-shadow: 0 0 3px rgba(212, 175, 55, 0.8);
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        /* 调整有事件标记时的标签样式 */
+        .marker-label.has-event {
+            padding-right: 2.5vw;  /* 为事件标记留出空间 */
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        /* 地图关闭按钮 */
+        .map-close-btn {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            background: rgba(0, 0, 0, 0.7);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: #ffffff;
+            font-size: 30px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            z-index: 1001;  /* 确保在地图标记之上 */
+            backdrop-filter: blur(5px);
+        }
+
+        .map-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            border-color: rgba(255, 255, 255, 0.6);
+            transform: rotate(90deg);
+            color: #4ECDC4;
+        }
+
+        .map-close-btn:active {
+            transform: rotate(90deg) scale(0.95);
+        }
+
+        /* 响应式调整 */
+        @media (max-width: 768px) {
+            .modal-content {
+                width: 90vw;
+                height: 80vh;
+            }
+            
+            .marker-label {
+                /* 原来是 font-size: 11px; padding: 0.5vh 1vw; */
+                font-size: 10px;              /* 更小字体 */
+                padding: 2px 6px;             /* 更小内边距 */
+                border-radius: 4px;           
+                max-width: 30vw;              /* 限制最大宽度，减少遮挡 */
+                overflow: hidden;
+                text-overflow: ellipsis;
+            }
+            .marker-label.has-event {
+                padding-right: 18px;          /* 给事件标记留空间 */
+            }
+            .event-indicator {
+                right: 6px;                   /* 更靠近右侧 */
+                font-size: 10px;              /* 缩小“!”大小 */
+            }
+
+            .btn {
+                min-width: 100px;
+                padding: 1.2vh 3vw;
+            }
+            /* 危险度信息的手机端优化 */
+            .danger-info {
+                padding: 1vh 3vw;  /* 增加左右padding */
+            }
+            
+            .info-row {
+                display: block;  /* 改为块级显示 */
+                margin-bottom: 1.5vh;
+            }
+            
+            /* 移动端三层字体大小 */
+            .info-label {
+                font-size: 14px;  /* 标题固定14px */
+                display: block;
+                margin-bottom: 0.5vh;
+            }
+            
+            .danger-level {
+                font-size: 12px;  /* 级别固定12px */
+                display: inline-block;
+                margin-right: 0.5vw;
+                margin-bottom: 0.3vh;
+            }
+            
+            .info-desc {
+                font-size: 11px;  /* 描述固定11px */
+                display: block;
+                margin-top: 0.3vh;
+                line-height: 1.4;
+            }
+            
+            .advice-list {
+                padding-left: 0;
+            }
+            
+            .advice-item {
+                font-size: 11px;  /* 建议内容固定11px */
+                padding-left: 2vw;
+            }
+
+            .map-close-btn {
+                width: 40px;
+                height: 40px;
+                font-size: 24px;
+                top: 15px;
+                right: 15px;
+            }
+        }
+
+        /* 针对更小屏幕的优化 */
+        @media (max-width: 480px) {
+            .info-label {
+                font-size: 13px;  /* 略微缩小 */
+            }
+            
+            .danger-level {
+                font-size: 11px;
+            }
+            
+            .info-desc,
+            .advice-item {
+                font-size: 10px;  /* 最小可读字体 */
+            }
+
+            .map-close-btn {
+                width: 35px;
+                height: 35px;
+                font-size: 20px;
+                top: 10px;
+                right: 10px;
+            }
+            .marker-label {
+                font-size: 9px;               /* 超小屏再缩小 */
+                padding: 2px 5px;
+                max-width: 28vw;
+            }
+            .marker-label.has-event {
+                padding-right: 16px;
+            }
+            .event-indicator {
+                right: 4px;
+                font-size: 9px;
+            }
+        }
+
+        /* 追加：禁用按钮样式 */
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <div class="map-container">
+        <div class="map-background" id="mapBackground"></div>
+        <!-- 关闭按钮 -->
+        <button class="map-close-btn" onclick="exitMap()">×</button>
+    </div>
+
+    <!-- 弹窗 -->
+    <div class="modal" id="locationModal">
+        <div class="modal-content">
+            <div class="modal-bg" id="modalBg"></div>
+            <div class="modal-overlay"></div>
+            <button class="close-btn" onclick="closeModal()">×</button>
+            <div class="modal-inner">
+                <div class="modal-body" id="modalBody"></div>
+                <div class="modal-footer" id="modalFooter">
+                    <button class="btn" id="actionBtn" onclick="showNPCList()">出行</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ========== 危险度信息数据 ========== [[12]]
+        const locationDangerInfo = {
+            '伊州': {
+                danger: { level: '中', desc: '各方势力混杂暗流涌动，党项暗桩和吕氏眼线潜伏，需时刻警惕' },
+                friendly: { level: '较高', desc: '天山派在城中有秘密据点，和当地驻防的汉民民团同仇敌忾，多有合作' },
+                advice: ['可扮作行商或江湖游侠，不必刻意隐瞒身份但也不要张扬', '可正常佩戴兵器，但要低调行事', '优先入住同福客栈，通过暗号联系自己人']
+            },
+            '千佛洞': {
+                danger: { level: '低', desc: '各方势力都尊重佛门清净地，护法武僧维持秩序，相对安全' },
+                friendly: { level: '较高', desc: '佛门慈悲为怀，高僧暗中扶危济困与天山派理念相合，可获庇护和医疗' },
+                advice: ['可用真实身份前往，但不必刻意暴露天山派身份', '入寺必须解下兵刃，建议严守寺中规矩，但寺内很安全', '可在香客居所落脚，向高僧请教医术或寻求帮助']
+            },
+            '博斯坦村': {
+                danger: { level: '低', desc: '地处偏僻远离主要冲突，村民淳朴友善，是理想的避世之所' },
+                friendly: { level: '较高', desc: '宁静渔村欢迎各路人士，茶楼是良好的信息交换场所，对天山派无敌意' },
+                advice: ['可用真实身份，也可扮作游侠商人更便于打探消息', '可正常佩戴兵器，此地民风不禁', '可前往茶楼和集市获取各方情报']
+            },
+            '博格达峰': {
+                danger: { level: '高', desc: '高寒缺氧雪崩频发，冰川裂隙遍布，极端天气变化无常，自然环境极其恶劣' },
+                friendly: { level: '中', desc: '无人烟的自然环境，不存在人为的友善或敌意，纯粹的自然挑战' },
+                advice: ['必须准备充足的防寒衣物和登山工具', '强烈建议携伴前往，互相照应', '建议雇佣当地熟悉地形的向导，切勿贸然深入']
+            },
+            '哈密绿洲': {
+                danger: { level: '较低', desc: '相对和平的贸易城市，虽有各方势力但总体稳定，商业氛围浓厚' },
+                friendly: { level: '较高', desc: '作为西域重要补给站商业发达，对各路人士相对包容，天山派可正常活动' },
+                advice: ['可以商人或游侠身份活动，不必刻意隐藏', '可正常佩戴兵器，符合江湖人士形象', '适合采购补给物资和收集情报']
+            },
+            '大沙海': {
+                danger: { level: '高', desc: '自然环境极其恶劣，沙暴致命流沙遍布，缺水缺粮，迷失方向九死一生' },
+                friendly: { level: '低', desc: '荒无人烟的死亡之地，没有补给和援助，只有白骨和死亡陷阱' },
+                advice: ['必须结伴而行', '雇佣经验丰富的沙漠向导是生死关键', '备足水粮和导航工具，轻装简从']
+            },
+            '天山派外堡': {
+                danger: { level: '低', desc: '天山派自己的领地，有守备哨塔保护，党项威胁虽在但防御完善' },
+                friendly: { level: '高', desc: '这是天山派为难民建立的庇护所，同门弟子守护，绝对安全可靠' },
+                advice: ['可公开天山派身份，甚至穿派服',  '正常佩戴兵器，协助守备和维持秩序']
+            },
+            '崆峒派': {
+                danger: { level: '低', desc: '友好门派提供庇护，九宫迷阵保护严密，是绝对安全的避风港' },
+                friendly: { level: '高', desc: '两派交情深厚常有交流，四门弟子友善相待，可获各种支持援助' },
+                advice: ['可公开天山派身份访问交流', '任何规模队伍都受欢迎', '正常佩戴兵器，可参与切磋交流']
+            },
+            '拜火教总坛': {
+                danger: { level: '高', desc: '邪教总部机关重重，地下熔洞岩浆遍布，教徒狂热视正道为死敌' },
+                friendly: { level: '低', desc: '邪教势力与天山正道理念完全对立，必欲除之而后快' },
+                advice: ['极度危险，不建议贸然潜入', '若必须前往需要周密计划和内应', '必须完全隐藏身份，准备防火隔热装备']
+            },
+            '昆仑派': {
+                danger: { level: '低', desc: '西域第一大派威严但包容，与天山派理念相合同气连枝，提供庇护' },
+                friendly: { level: '高', desc: '与天山派关系友好立场一致，掌门公正无私，可获医疗武学等各种援助' },
+                advice: ['可公开天山派身份拜访，受到礼遇', '正常佩戴兵器，可参与切磋交流', '可交流武学、寻求调解、寻医问药等']
+            },
+            '月牙泉': {
+                danger: { level: '低', desc: '西域唯一绝对中立地，严禁动武的安全地带，各方势力默契遵守规则' },
+                friendly: { level: '高', desc: '不问来历不结仇怨，茶舍提供庇护疗伤传信等服务，真正的避风港' },
+                advice: ['可以真实身份前往，这里不问来历', '进入茶舍需解下兵刃但绝对安全', '可在此休整疗伤打探情报甚至与仇敌谈判']
+            },
+            '沙州': {
+                danger: { level: '高', desc: '吕氏伪军盘踞，西夏驻军虎视，密探遍布告密成风，暴露身份必死无疑' },
+                friendly: { level: '低', desc: '被世仇吕氏占据民不聊生，虽有天山暗哨但必须极度隐蔽才能活动' },
+                advice: ['必须乔装成商人或平民，绝不可暴露身份', '建议少数人结伴前往，避免大规模行动', '依托天山暗哨低调活动，远离吕氏府衙']
+            },
+            '瓜州': {
+                danger: { level: '高', desc: '西夏擒生军大本营，专事捕捉汉民，数万党项精锐虎视眈眈' },
+                friendly: { level: '低', desc: '人间地狱，汉民如待宰羔羊，天山派弟子在此如羊入虎口，九死一生' },
+                advice: ['极度危险不建议前往，如必须则需周密计划', '必须完全改换身份相貌，准备多重掩护', '建议先收集情报寻找内应，切勿轻举妄动']
+            },
+            '白驼山': {
+                danger: { level: '较高', desc: '贩奴世家防御森严，死士三百，毒虫猛兽遍布，与天山派多有冲突' },
+                friendly: { level: '低', desc: '专事贩卖汉人为奴，与天山派扶危济困理念完全对立' },
+                advice: ['必须乔装成商人或买家，绝不可暴露天山派身份', '建议携伴前往，需有熟悉地形的向导', '兵器需隐藏携带，准备解毒药物防范毒虫', '建议带足金银细软，即使遇险，也可用钱财保命']
+            },
+            '迪坎儿村': {
+                danger: { level: '较低', desc: '村子极度贫困毫无威胁，需防范疾病传染，环境恶劣但人心不坏' },
+                friendly: { level: '高', desc: '天山派会暗中接济贫困村民，村民对此感恩戴德' },
+                advice: ['可以真实身份前往，甚至可穿天山派服饰以获信任', '携带粮食药品接济村民，无需时刻佩戴兵器']
+            },
+            '高昌': {
+                danger: { level: '较低', desc: '文化圣城各方不敢轻易破坏，宗教宽容氛围有利活动，相对和平稳定' },
+                friendly: { level: '中', desc: '回鹘王庭相对开明,对各方势力持中立态度，但仍需谨慎' },
+                advice: ['可扮作学者或行商，利用文化交流作掩护', '可正常佩戴兵器但不要张扬，避免惹是生非']
+            },
+            '龟兹': {
+                danger: { level: '较低', desc: '城主暗中支持天山派，汉人聚居区是天然盟友，相对独立自治较安全' },
+                friendly: { level: '高', desc: '城主是汉将后裔，理念相合，城中有驿馆提供庇护，汉风古街也多有支持者' },
+                advice: ['可用真实身份但在公开场合仍需低调', '可正常佩戴兵器', '优先联系驿馆和汉风古街的支持者']
+            }
+        };
+
+        // ========== 事件系统 ==========
+        // 事件标记变量
+        let randomEvent = 0;  // 随机事件标记
+        let battleEvent = 0;   // 战斗事件标记
+
+        // 存储每个地点的事件状态
+        let locationEvents = {};
+
+        // 根据危险度获取战斗事件概率范围
+        function getBattleEventChance(dangerLevel) {
+            switch(dangerLevel) {
+                case '低': return 0;      // 0-5%
+                case '较低': return 5;    // 0-8%
+                case '中': return 10;     // 0-12%
+                case '较高': return 15;   // 0-16%
+                case '高': return 25;     // 0-20%
+                default: return 10;       // 默认10%
+            }
+        }
+
+        // 为地点生成事件
+        function generateLocationEvents() {
+            locationEvents = {};
+            
+            for (const [locationName, locationInfo] of Object.entries(locationDatabase)) {
+                const events = {
+                    hasRandomEvent: false,
+                    hasBattleEvent: false
+                };
+                
+                // 使用一个随机数决定事件类型
+                const eventRoll = Math.random() * 100;
+                
+                // 先判断战斗事件（优先级更高）
+                const dangerInfo = locationDangerInfo[locationName];
+                if (dangerInfo) {
+                    const battleChance = getBattleEventChance(dangerInfo.danger.level);
+                    
+                    if (eventRoll < battleChance) {
+                        events.hasBattleEvent = true;
+                    } else if (eventRoll < battleChance + 10) {
+                        // 战斗事件没触发时，再判断随机事件
+                        events.hasRandomEvent = true;
+                    }
+                } else {
+                    // 没有危险度信息的地点，只判断随机事件
+                    if (eventRoll < 10) {
+                        events.hasRandomEvent = true;
+                    }
+                }
+                
+                locationEvents[locationName] = events;
+            }
+        }
+
+// ========== 声望系统和好感度系统 ==========
+        // 主角声望值（范围0-300）
+        let playerReputation = 50;
+
+        // 地点声望门槛（低于此值无法前往）
+        const locationReputationThreshold = {
+            '天山派外堡': 0,
+            '博格达峰': 200,
+            '伊州': 10,
+            '哈密绿洲': 30,
+            '高昌': 90,
+            '迪坎儿村': 20,
+            '大沙海': 100,
+            '博斯坦村': 20,
+            '沙州': 110,
+            '瓜州': 130,
+            '龟兹': 80,
+            '崆峒派': 60,
+            '昆仑派': 70,
+            '拜火教总坛': 150,
+            '白驼山': 120,
+            '月牙泉': 40,
+            '千佛洞': 50
+        };
+
+        // NPC需要的好感度门槛
+        const npcFavorThreshold = {
+            '洞庭君': 30,
+            '钱塘君': 0,
+            '萧白瑚': 10,
+            '姬姒': 10,
+            '破阵子': 999,
+            '呼延显': 999,
+            '施延年': 10,
+            '雨烛': 30,
+            '安慕': 20,
+            '唐沐梨': 20,
+            '洛潜幽': 30,
+            '玄天青': 999,
+            '鹿椿若': 20,
+            '苓雪妃': 30
+        };
+
+        // NPC当前好感度
+        let npcCurrentFavor = {
+            '洞庭君': 30,
+            '钱塘君': 40,
+            '萧白瑚': 25,
+            '姬姒': 20,
+            '破阵子': 35,
+            '呼延显': 30,
+            '施延年': 50,
+            '雨烛': 60,
+            '安慕': 45,
+            '唐沐梨': 15,
+            '洛潜幽': 10,
+            '玄天青': 10,
+            '鹿椿若': 10,
+            '苓雪妃': 10
+        };
+
+        // 根据声望获取最大可邀请NPC数量
+        function getMaxNPCCount() {
+            if (playerReputation >= 100) return 2;
+            return 1;
+        }
+        // ========== 统一的地点数据管理 ==========
+        // 所有地点信息集中在这里，方便编辑和管理
+        const locationDatabase = {
+            '天山派外堡': {
+                position: { top: '17%', left: '57%' },
+                description: '穿过蜿蜒十里的隐秘峡谷，眼前豁然开朗是一片山间盆地。这里聚居着数千汉唐遗民和各族难民，他们或因战乱流离，或因暴政所迫，纷纷投奔天山派寻求庇护。盆地中良田千顷，渠水环绕，集市上商贩叫卖声此起彼伏，俨然一处世外桃源。天山弟子日夜巡防不敢松懈，誓死守护这片净土。外堡不仅是难民的避风港，更是天山派联系外界的前哨。',
+                backgroundImage: 'img/location/scene_webp/天山派外堡/昼/集市.webp'
+            },
+            '博格达峰': {
+                position: { top: '13%', left: '80%' },
+                description: '天山东段第一高峰，山高千余丈，终年积雪覆顶。博格达在西域语中意为"神灵"，当地各族皆视其为圣山。峰顶常年云雾缭绕，传说能登顶者可得天人感应。山峰间多冰川峭壁，地势险恶，却也有温泉幽谷伴生各式奇珍异兽，因此成为绝佳的避世之地。月圆之夜，山巅会有剑气冲天，疑是前辈高人留下的剑意。',
+                backgroundImage: 'img/location/scene_webp/博格达峰/昼/冰川.webp'
+            },
+            '伊州': {
+                position: { top: '28%', left: '60%' },
+                description: '古称伊吾，扼守通往中原的咽喉要道，历来是兵家必争之地。城池坚固，有内外两重城墙，城楼高耸。如今城中势力错综复杂，表面由高昌回鹘控制，实则各方暗中角力，天山派在此设有据点。作为丝路重镇，城内胡汉杂居，寺塔并立，每日都有数百驼队进出。虽处乱世，商业依然繁盛，西域的葡萄美酒、中原的丝绸瓷器在此汇聚。',
+                backgroundImage: 'img/location/scene_webp/伊州/昼/街道.webp'
+            },
+            '哈密绿洲': {
+                position: { top: '40%', left: '80%' },
+                description: '天山雪水滋养的沙漠明珠，方圆百里尽是葱郁农田。这里不仅是瓜果之乡，更是西域最重要的粮食产地。绿洲中央有七眼泉水，终年不竭，灌溉系统纵横交错如血脉般滋养大地。除了闻名遐迩的哈密瓜，还盛产小麦、葡萄、杏子等作物。绿洲上散布着大小村落二十余个，居民多为世代耕种的农户。每到收获季节，田野里到处是忙碌的身影，欢声笑语不绝于耳。然而这片富饶之地也招来觊觎，各方势力都想控制这个粮仓。村民们组织了自卫队，但面对正规军依然力不从心。天山派常暗中派人保护秋收，与当地农民关系密切。',
+                backgroundImage: 'img/location/scene_webp/哈密绿洲/昼/村落.webp'
+            },
+            '高昌': {
+                position: { top: '10%', left: '23%' },
+                description: '高昌国都城，亦是回鹘王庭所在。千年佛国圣地，城中佛寺林立，大小寺院有四十余座，晨钟暮鼓声声不绝。最著名的是高昌北庭寺，有数层楼高的石刻佛像，宝相巍峨令人震撼。作为丝路文化交汇点，城内保存着大量壁画、经卷和石刻，记录了东西方文明交流的历史。城中还有讲经堂、译经院等文化机构，各国学者云集于此研习佛法。街巷间随处可见身披袈裟的僧侣，也有道士、摩尼教徒等其他宗教人士。这种宗教宽容的氛围，使高昌成为精神避难所。近年来虽有战乱，但各方都不敢轻易破坏这座文化圣城',
+                backgroundImage: 'img/location/scene_webp/高昌/昼/街道.webp'
+            },
+            '迪坎儿村': {
+                position: { top: '15%', left: '33%' },
+                description: '高昌东南的凋敝村落，村民自称楼兰末裔，世代守护着通往楼兰故址的秘密。战乱让这个本就贫瘠的村子更加凄惨，青壮年不是被抓去充军就是逃往他处，只剩老弱妇孺苦守家园。村中十室九空，断壁残垣随处可见。白日里村民战战兢兢，夜晚更是家家闭户，生怕擒生军突袭。为了活命，他们被迫向各路寻宝者贩卖假地图，用谎言换取一点口粮。村口那株千年胡杨早已枯死，如同这个村子的命运。老人们还在固执地传唱楼兰古歌，声音沙哑绝望。孩子们面黄肌瘦，眼中却还有一丝对未来的渴望。天山派偶尔会暗中接济，但也只是杯水车薪。',
+                backgroundImage: 'img/location/scene_webp/迪坎儿村/昼/村落.webp'
+            },
+            '大沙海': {
+                position: { top: '30%', left: '40%' },
+                description: '东西绵延千里，南北宽达四百里的浩瀚沙海，沙丘如山，随风迁移，昨日的路标今日便被黄沙吞没。商队必须沿着绿洲边缘小心行进，直接横穿者九死一生。沙漠深处据说埋藏着诸多古国遗址，引来无数寻宝者葬身沙海。每当沙暴来临，天地昏黄如末日降临，即便是最有经验的向导也会迷失方向。',
+                backgroundImage: 'img/location/scene_webp/大沙海/昼/沙漠.webp'
+            },
+            '博斯坦村': {
+                position: { top: '35%', left: '68%' },
+                description: '博斯腾湖畔的宁静渔村，在突厥语中意为"绿洲花园"。村子依山傍水，风景如画。博斯腾湖是西域最大的淡水湖，湖中盛产各种鱼类，村民世代以捕鱼为生。春季芦苇青青，夏日荷花盛开，秋天渔歌唱晚，冬日则冰封如镜。因地处偏僻，这里成了许多江湖人士的避世之所。村中的茶馆酒肆，更是各路消息的集散地。',
+                backgroundImage: 'img/location/scene_webp/博斯坦村/昼/村落.webp'
+            },
+            '沙州': {
+                position: { top: '74%', left: '65%' },
+                description: '昔日归义军的荣耀之都，如今沦为吕氏伪军的罪恶巢穴。一百多年前，民族英雄张议潮在此起兵，驱逐吐蕃收复河西，建立归义军政权，护佑汉民百年。如今吕氏篡权者占据此城，对外卑躬屈膝依附党项，对内横征暴敛鱼肉百姓。城中原本繁华的集市萧条冷清，百姓面有菜色不敢言语。吕氏为讨好西夏，常将汉家女子作为贡品送出。天山派在城中暗设联络点，等待时机光复故土。',
+                backgroundImage: 'img/location/scene_webp/沙洲/昼/街道.webp'
+            },
+            '瓜州': {
+                position: { top: '68%', left: '80%' },
+                description: '西夏铁蹄下的人间地狱，党项西进的桥头堡。原为河西重镇，今成擒生军大营。城内外扎营数万党项精锐，虎视眈眈窥伺西域。擒生军统领驻节于此，专事掳掠汉民为奴。每日都有铁笼囚车自城门进出，关押的汉人如待宰羔羊。城中设有奴隶市场，汉家儿女被明码标价，场面惨不忍睹。原有汉民十不存一，稍有反抗便被斩首示众，人头悬挂城门经月不腐。夜深时分，城中常传出撕心裂肺的哭嚎声。',
+                backgroundImage: 'img/location/scene_webp/瓜州/昼/军营.webp'
+            },
+            '龟兹': {
+                position: { top: '25%', left: '10%' },
+                description: '昔日安西四镇之首，如今虽不复大唐盛景，仍是西域铁器制造中心。城中铁匠作坊星罗棋布，打铁声日夜不绝，产出的精铁兵器远销各地。名义上向高昌回鹘称臣纳贡，实则保持独立自治。城主是前朝汉将后裔，暗中支持天山派对抗党项，双方通过秘密渠道保持往来。居民汉胡杂处，各安其业。城周矿山产出的上等矿石，是各方势力都想染指的资源。这座铁与火的城市，在乱世中顽强地守护着最后的尊严。',
+                backgroundImage: 'img/location/scene_webp/龟兹/昼/街道.webp'
+            },
+            '崆峒派': {
+                position: { top: '60%', left: '93%' },
+                description: '道家名山崆峒山上的千年大派，以奇门遁甲之术称雄西域。山势险峻，共有九宫八卦七十二峰，暗合道家玄理。掌派精通阴阳五行，可推算天机，山中遍布机关阵法，外人若无引路，极易迷失其中。崆峒派虽是道家门派，却不避世隐居，反而积极参与江湖事务。与天山派关系友好，经常互派弟子交流武学。',
+                backgroundImage: 'img/location/scene_webp/崆峒派/昼/武侠门派.webp'
+            },
+            '昆仑派': {
+                position: { top: '55%', left: '40%' },
+                description: '雄踞昆仑山脉的西域第一大派，派风严谨，规矩森严，武学博大精深，尤以剑法著称。现任掌门德高望重，在西域武林一言九鼎，经常调解各派纷争。山门恢弘壮丽，依山而建的殿阁层层叠叠直入云端。派中收徒不问出身，故门下既有汉人，也有回鹘、吐蕃等各族弟子。与天山派同气连枝，在对抗邪派和外敌入侵上立场一致。',
+                backgroundImage: 'img/location/scene_webp/昆仑派/昼/武侠门派.webp'
+            },
+            '拜火教总坛': {
+                position: { top: '35%', left: '30%' },
+                description: '隐匿于火焰山最深处的邪教总部，终日烈火熊熊，热浪滚滚。拜火教起源于波斯，传入西域后逐渐变质为邪教。教徒们狂热地崇拜火焰，认为火可净化一切。总坛建于地下熔洞之中，以岩浆为池，以烈焰为墙，常人根本无法靠近。教中等级森严，通过残酷的火焰试炼来选拔教徒。他们经常劫掠村庄，强迫村民入教，不从者往往被投入火中。与以中原武林正统的昆仑、崆峒、天山等门派天然对立。',
+                backgroundImage: 'img/location/scene_webp/拜火教总坛/昼/邪教祭坛.webp'
+            },
+            '白驼山': {
+                position: { top: '69%', left: '17%' },
+                description: '盘踞西域百年的贩奴世家巢穴，世代经营人口买卖。山庄建于险峰之上，下临深渊，只有一条窄道可上。庄内豢养各种毒虫猛兽，更有西域诸国训练的死士护卫。白驼山与党项贵族皆有勾结，形成遍布西域的贩奴网络。他们专挑落单旅人、破产农户下手，男为奴工，女入教坊，童子则贩往西夏充军。庄中地牢关押奴隶数以百计，哀号之声日夜不绝。',
+                backgroundImage: 'img/location/scene_webp/白驼山/昼/武侠门派.webp'
+            },
+            '月牙泉': {
+                position: { top: '79%', left: '57%' },
+                description: '鸣沙山怀抱中的一弯清泉，因形似新月而得名。泉水清澈甘甜，千年不枯不溢，被誉为沙漠第一泉。这里是丝路商队的重要补给站，也是江湖人士经常聚会的地方。泉边有数家客栈茶肆，是西域唯一的中立之地，各方势力达成默契——谁也不能在泉边动武。战乱中的人们来此暂得喘息，仇敌可以同桌饮茶，亡命之徒能安睡一晚。泉水清冽甘甜，传说能洗去杀孽。夜深时分，常有人对着月泉许愿，祈求这乱世早日结束。也有江湖儿女在此定情，因为谁都不知道明天是否还能相见。这片小小的宁静，是黑暗中最后的烛光。',
+                backgroundImage: 'img/location/scene_webp/月牙泉/昼/绿洲.webp'
+            },
+            '千佛洞': {
+                position: { top: '70%', left: '53%' },
+                description: '莫高窟的俗称，开凿于前秦时期，历经十余个朝代扩建，现有洞窟七百余个。洞内壁画精美绝伦，佛像庄严肃穆，是佛教艺术的宝库。虽处乱世，僧侣们依然坚守此地，日夜诵经不辍。寺院对各方势力保持中立，不参与世俗纷争，因此得以在乱世中保全。但暗地里，不少高僧会悄悄下山扶危济困。藏经洞中收藏了大量经书文献，其中不乏武学秘籍。每年佛诞日，各地信徒云集于此，场面壮观。传说在某个隐秘洞窟中，藏有天竺僧侣留下的武学心得，但至今无人找到。',
+                backgroundImage: 'img/location/scene_webp/千佛洞/昼/石窟.webp'
+            }
+        };
+
+        // NPC列表 [[11]]
+        const npcList = [
+            '洞庭君', '钱塘君', '萧白瑚', '姬姒', '破阵子',
+            '呼延显', '施延年', '雨烛', '安慕', '唐沐梨', '洛潜幽', '玄天青', '鹿椿若', '苓雪妃'
+        ];
+
+        let currentLocation = '';
+        let selectedNPCs = [];
+        let bountyLocation = null;  // 悬赏目标地点（由 index.html 传入，SR 链路永远为 null）
+
+        const idToName = {
+        'A': '破阵子','B': '洞庭君','C': '钱塘君','D': '萧白瑚','E': '姬姒','F': '施延年',
+        'G': '呼延显','H': '雨烛','I': '安慕','J': '唐沐梨','K': '洛潜幽','L': '神秘杂役','M': '玄天青','N': '鹿椿若','O': '苓雪妃'
+        };
+
+        function hydrateFromParentQuery() {
+            const q = new URLSearchParams(window.location.search);
+
+            // 1) 声望
+            const rep = parseInt(q.get('reputation'), 10);
+            if (!Number.isNaN(rep)) {
+                playerReputation = rep; // 影响可出行判断和可邀请人数[[17]]
+            }
+
+            // 2) 传入的当前地图、事件标记（可选，主要用于回显/保持状态）
+            const ml = q.get('mapLocation');
+            if (ml) {
+                // 可按需用于默认选中/滚动到该地点，这里先存一份
+                window._incomingMapLocation = ml;
+            }
+            const re = parseInt(q.get('randomEvent'), 10);
+            if (!Number.isNaN(re)) randomEvent = re;
+            const be = parseInt(q.get('battleEvent'), 10);
+            if (!Number.isNaN(be)) battleEvent = be;
+
+            // 悬赏：目标地点（只有 index.html 的 showWorldMap() 会传这个参数，SR 链路不传时保持 null）
+            const bl = q.get('bountyLocation');
+            if (bl) bountyLocation = bl;
+
+            // 3) 随行NPC（可选，用于默认勾选）
+            // URL 参数优先（父页实时传入的当前值），localStorage 兜底（index.html 同源传递，避免URL过长）
+            try {
+                const comp = JSON.parse(q.get('companionNPC') || localStorage.getItem('worldmap_companionNPC') || '[]');
+                if (Array.isArray(comp)) {
+                window._incomingCompanions = comp; // 可在 showNPCList 里用来默认勾选
+                }
+            } catch (e) {}
+
+            // 4) 好感度：父页传的是以ID为键的对象，这里转成“中文名”为键
+            // URL 参数优先（父页实时传入的当前值），localStorage 兜底（index.html 同源传递）
+            try {
+                const favorRaw = JSON.parse(q.get('npcFavorability') || localStorage.getItem('worldmap_npcFavorability') || '{}');
+                const favorByName = {};
+                Object.entries(favorRaw).forEach(([id, val]) => {
+                const name = idToName[id] || id;
+                favorByName[name] = val;
+                });
+                // 用传入数据覆盖默认的 npcCurrentFavor
+                npcCurrentFavor = { ...npcCurrentFavor, ...favorByName };
+            } catch (e) {}
+
+            // 5) 地点信息迭代：locationOverrides（父页传来，locationMemory 里已更新地点的 危险度/友善度/行动建议）
+            // 浅合并覆盖 locationDangerInfo，只影响有数据的地点，其它地点保持硬编码默认值；
+            // index - SR.html 的 showWorldMap() 不传这个参数，收不到参数时这里直接跳过，行为和现在完全一样
+            try {
+                const overridesRaw = localStorage.getItem('worldmap_locationOverrides') || q.get('locationOverrides');
+                if (overridesRaw) {
+                    const overrides = JSON.parse(overridesRaw);
+                    Object.keys(overrides).forEach(function(loc) {
+                        if (locationDangerInfo[loc]) {
+                            Object.assign(locationDangerInfo[loc], overrides[loc]);
+                        }
+                    });
+                }
+            } catch (e) { /* 解析失败静默忽略，保留硬编码默认值 */ }
+        }
+
+        // 初始化地图标记
+        function initializeMap() {
+            const mapBackground = document.getElementById('mapBackground');
+            
+            // 生成事件
+            generateLocationEvents();
+            
+            for (const [locationName, locationInfo] of Object.entries(locationDatabase)) {
+                const marker = document.createElement('div');
+                marker.className = 'map-marker';
+                marker.style.top = locationInfo.position.top;
+                marker.style.left = locationInfo.position.left;
+                marker.setAttribute('data-location', locationName);
+                
+                // 检查是否有事件
+                const events = locationEvents[locationName];
+                let eventIndicator = '';
+                let hasEventClass = '';
+                
+                if (events) {
+                    if (events.hasBattleEvent) {
+                        eventIndicator = '<span class="event-indicator event-battle">!</span>';
+                        hasEventClass = 'has-event';
+                    } else if (events.hasRandomEvent) {
+                        eventIndicator = '<span class="event-indicator event-random">!</span>';
+                        hasEventClass = 'has-event';
+                    }
+                }
+
+                // 悬赏标记：若当前地点为悬赏目标地点，叠加 ⚔ 图标（bountyLocation 为 null 时天然不命中，无副作用）
+                let bountyIndicator = '';
+                if (bountyLocation && locationName === bountyLocation) {
+                    bountyIndicator = '<span class="event-indicator event-bounty">\u2694</span>';
+                    hasEventClass = 'has-event';
+                }
+                
+                marker.innerHTML = `
+                    <div class="marker-pin"></div>
+                    <div class="marker-label ${hasEventClass}">
+                        ${locationName}
+                        ${eventIndicator}
+                        ${bountyIndicator}
+                    </div>
+                `;
+                
+                marker.addEventListener('click', function() {
+                    currentLocation = locationName;
+                    showLocationInfo(locationName);
+                });
+                
+                mapBackground.appendChild(marker);
+            }
+        }
+
+        // 显示地点信息
+        function showLocationInfo(location) {
+            // 隐藏地图关闭按钮
+            const closeBtn = document.querySelector('.map-close-btn');
+            if (closeBtn) {
+                closeBtn.style.display = 'none';
+            }
+            const modal = document.getElementById('locationModal');
+            const modalBody = document.getElementById('modalBody');
+            const modalFooter = document.getElementById('modalFooter');
+            const modalBg = document.getElementById('modalBg');
+            
+            // 设置背景图片
+            modalBg.style.backgroundImage = `url('${locationDatabase[location].backgroundImage}')`;
+            
+            // 检查声望是否足够
+            const requiredRep = locationReputationThreshold[location] || 0;
+            const canTravel = playerReputation >= requiredRep;
+            
+            // 获取危险度信息
+            const dangerInfo = locationDangerInfo[location] || {
+                danger: { level: '未知', desc: '暂无相关情报' },
+                friendly: { level: '未知', desc: '暂无相关情报' },
+                advice: ['建议谨慎行事']
+            };
+            
+            let dangerHTML = `
+                <div class="danger-info">
+                    <div class="info-row">
+                        <span class="info-label">危险度：</span>
+                        <span class="danger-level danger-${dangerInfo.danger.level}">${dangerInfo.danger.level}</span>
+                        <span class="info-desc">${dangerInfo.danger.desc}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">友善度：</span>
+                        <span class="danger-level friendly-${dangerInfo.friendly.level}">${dangerInfo.friendly.level}</span>
+                        <span class="info-desc">${dangerInfo.friendly.desc}</span>
+                    </div>
+                    <div class="info-row">
+                        <span class="info-label">行动建议：</span>
+                    </div>
+                    <div class="advice-list">
+                        ${dangerInfo.advice.map(advice => `<div class="advice-item">${advice}</div>`).join('')}
+                    </div>
+                </div>
+            `;
+            
+            modalBody.innerHTML = `
+                <div class="modal-header">
+                    <h2>${location}</h2>
+                </div>
+                <div style="padding: 2vh 0;">
+                    <p>${locationDatabase[location].description}</p>
+                    ${dangerHTML}
+                    ${!canTravel ? `<div class="reputation-warning">⚠ 声望不足！需要声望${requiredRep}点，当前${playerReputation}点</div>` : ''}
+                </div>
+            `;
+            
+            if (canTravel) {
+                modalFooter.innerHTML = '<button class="btn" onclick="showNPCList()">出行</button>';
+            } else {
+                modalFooter.innerHTML = '<button class="btn" disabled style="opacity: 0.5; cursor: not-allowed;">声望不足</button>';
+            }
+            
+            modal.style.display = 'block';
+        }
+
+        // 显示NPC列表（必须至少选择1人才能出行）
+        function showNPCList() {
+            const modalBody = document.getElementById('modalBody');
+            const modalFooter = document.getElementById('modalFooter');
+
+            // 展示 npcFavorThreshold 内的所有 NPC
+            const allNPCs = Object.keys(npcFavorThreshold);
+            // 计算可邀请 NPC（好感达到且阈值不为999）
+            const eligibleNPCs = allNPCs.filter(npc => {
+                const threshold = npcFavorThreshold[npc];
+                const favor = (npcCurrentFavor[npc] || 0);
+                return threshold !== 999 && favor >= threshold;
+            });
+            const maxCount = getMaxNPCCount();
+
+            let npcHTML = `
+                <div class="modal-header">
+                    <h2>选择同行旅伴</h2>
+                </div>
+                <div style="padding: 2vh 0;">
+                    <p class="tip-text">请选择要一起前往${currentLocation}的同伴（最多可选${maxCount}人，至少1人）</p>
+                    <div class="npc-list">
+            `;
+
+            if (allNPCs.length > 0) {
+                allNPCs.forEach(npc => {
+                    const threshold = npcFavorThreshold[npc];
+                    const favor = (npcCurrentFavor[npc] || 0);
+                    const isLocked = threshold === 999;
+                    const isEligible = !isLocked && favor >= threshold;
+                    const disabledAttr = isEligible ? '' : 'disabled';
+                    const forceDisabledClass = isEligible ? '' : 'force-disabled';
+                    const itemDisabledClass = isEligible ? '' : 'disabled';
+                    const nameDisabledClass = isEligible ? '' : 'disabled';
+                    const hintText = isEligible
+                        ? ''
+                        : (isLocked ? '随行功能等待后续更新解锁' : `需好感${threshold}（当前${favor}）`);
+
+                    npcHTML += `
+                        <div class="npc-item ${itemDisabledClass}">
+                            <input type="checkbox" class="npc-checkbox ${forceDisabledClass}" id="npc-${npc}" value="${npc}" onchange="checkNPCLimit()" ${disabledAttr}>
+                            <label class="npc-name ${nameDisabledClass}" for="npc-${npc}">${npc}</label>
+                            ${hintText ? `<span class="npc-hint">${hintText}</span>` : ''}
+                        </div>
+                    `;
+                });
+            } else {
+                npcHTML += '<p style="text-align: center; color: rgba(255,255,255,0.5);">暂无可邀请的同伴（好感度不足）</p>';
+            }
+
+            npcHTML += '</div></div>';
+            modalBody.innerHTML = npcHTML;
+
+            // 出行按钮：默认禁用；若无可邀请同伴则显示“无法出行”
+            const travelBtnLabel = eligibleNPCs.length > 0 ? '前往' : '无法出行';
+            modalFooter.innerHTML = `<button class="btn" id="travelBtn" onclick="goToLocation()" disabled>${travelBtnLabel}</button>`;
+
+            // 如父页传来默认同行人，尽量预勾选（不超过maxCount）
+            if (eligibleNPCs.length > 0 && Array.isArray(window._incomingCompanions) && window._incomingCompanions.length) {
+                let count = 0;
+                const preset = new Set(window._incomingCompanions);
+                eligibleNPCs.forEach(npc => {
+                    if (count >= maxCount) return;
+                    if (preset.has(npc)) {
+                        const cb = document.getElementById(`npc-${npc}`);
+                        if (cb) {
+                            cb.checked = true;
+                            count++;
+                        }
+                    }
+                });
+            }
+
+            // 应用人数上限与按钮可用状态
+            checkNPCLimit();
+        }
+
+        // 检查NPC选择数量限制 + 切换“前往”按钮可用状态（至少1人）
+        function checkNPCLimit() {
+            const checkboxes = document.querySelectorAll('.npc-checkbox');
+            const checkedCount = document.querySelectorAll('.npc-checkbox:checked').length;
+            const maxCount = getMaxNPCCount();
+
+            // 达到上限时，未勾选的禁用；否则全部解禁
+            if (checkedCount >= maxCount) {
+                checkboxes.forEach(checkbox => {
+                    if (!checkbox.checked) checkbox.disabled = true;
+                });
+            } else {
+                checkboxes.forEach(checkbox => {
+                    if (!checkbox.classList.contains('force-disabled')) {
+                        checkbox.disabled = false;
+                    }
+                });
+            }
+
+            // 至少选择1人方可出行
+            const travelBtn = document.getElementById('travelBtn');
+            if (travelBtn) {
+                const canTravel = checkedCount >= 1;
+                travelBtn.disabled = !canTravel;
+                travelBtn.textContent = canTravel ? '前往' : '请选择同伴';
+            }
+        }
+
+        // 前往地点（至少1名同行NPC）
+        function goToLocation() {
+            // 隐藏地图关闭按钮（因为已经在选择旅行了）
+            const closeBtn = document.querySelector('.map-close-btn');
+            if (closeBtn) {
+                closeBtn.style.display = 'none';
+            }
+
+            selectedNPCs = [];
+            document.querySelectorAll('.npc-checkbox:checked').forEach(checkbox => {
+                selectedNPCs.push(checkbox.value);
+            });
+
+            // 强制校验：至少选择1人
+            if (selectedNPCs.length < 1) {
+                const tip = document.querySelector('.tip-text');
+                if (tip) {
+                    tip.style.color = '#FF6B6B';
+                    tip.textContent = '请至少选择一位同行旅伴后再出行';
+                }
+                const travelBtn = document.getElementById('travelBtn');
+                if (travelBtn) travelBtn.disabled = true;
+                return;
+            }
+
+            // 检查当前地点是否有事件
+            const events = locationEvents[currentLocation];
+
+            // 重置事件标记
+            let newRandomEvent = 0;
+            let newBattleEvent = 0;
+            if (events) {
+                if (events.hasBattleEvent) {
+                    newBattleEvent = 1;
+                    console.log(`触发战斗事件！地点：${currentLocation}`);
+                } else if (events.hasRandomEvent) {
+                    newRandomEvent = 1;
+                    console.log(`触发随机事件！地点：${currentLocation}`);
+                }
+            }
+
+            // 把局部结果写回全局，供 confirmTravel 回传
+            randomEvent = newRandomEvent;
+            battleEvent = newBattleEvent;
+
+            // 显示确认信息
+            const modalBody = document.getElementById('modalBody');
+            const modalFooter = document.getElementById('modalFooter');
+
+            let eventWarning = '';
+            if (events && events.hasBattleEvent) {
+                eventWarning = '<p style="color: #FF4444; font-weight: bold;">⚠ 此地有战斗发生！</p>';
+            } else if (events && events.hasRandomEvent) {
+                eventWarning = '<p style="color: #FFD700; font-weight: bold;">✦ 此地有特殊事件！</p>';
+            }
+            // 悬赏警告（与普通随机事件互斥，只要目的地命中就提示）
+            if (bountyLocation && currentLocation === bountyLocation) {
+                eventWarning += '<p style="color: #d4af37; font-weight: bold;">⚔ 此地有悬赏目标！</p>';
+            }
+
+            const message = `
+                <div class="result-message">
+                    <h3>启程</h3>
+                    ${eventWarning}
+                    <p>和${selectedNPCs.join('、')}一起前往${currentLocation}</p>
+                </div>
+            `;
+
+            modalBody.innerHTML = message;
+            modalFooter.innerHTML = '<button class="btn" onclick="confirmTravel()">确定</button>';
+        }
+
+        // 新增确认旅行函数
+        function confirmTravel() {
+            // 向父窗口发送数据
+            if (window.parent !== window) {
+                window.parent.postMessage({
+                    type: 'worldmap-exit',
+                    mapLocation: currentLocation,
+                    companionNPC: selectedNPCs,
+                    randomEvent: randomEvent,
+                    battleEvent: battleEvent,
+                    bountyBattle: (bountyLocation && currentLocation === bountyLocation) ? 1 : 0
+                }, '*');
+            }
+        }
+
+        // 关闭弹窗
+        function closeModal() {
+            document.getElementById('locationModal').style.display = 'none';
+            selectedNPCs = [];
+            
+            // 重新显示地图关闭按钮
+            const closeBtn = document.querySelector('.map-close-btn');
+            if (closeBtn) {
+                closeBtn.style.display = 'block';
+            }
+        }
+
+        function exitMap() {
+            // 不发送任何消息，直接关闭地图页面
+            // 如果是在iframe中，尝试通知父窗口关闭modal（不传递数据）
+            if (window.parent !== window) {
+                // 只是通知关闭，不传递任何游戏数据
+                window.parent.postMessage({
+                    type: 'worldmap-close'
+                }, '*');
+            }
+        }
+
+        // 点击背景关闭弹窗
+        window.addEventListener('click', function(event) {
+            const modal = document.getElementById('locationModal');
+            if (event.target === modal) {
+                closeModal();
+            }
+        });
+
+        // 页面加载完成后初始化地图
+        window.addEventListener('DOMContentLoaded', () => {
+        hydrateFromParentQuery();   // 先吃掉父页传入的数据
+        initializeMap();            // 再初始化地图（会用到 playerReputation 等）
+        });
+    </script>
+    <script src="module/button-sfx.js"></script>
+</body>
+</html>
